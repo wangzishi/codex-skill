@@ -1,6 +1,6 @@
 # plan
 
-Use before you publish any plan/design/architecture. Codex should help you detect missing requirements, risks, and the minimum clarifying questions + acceptance checklist.
+Use before you publish any plan/design/architecture (including before ExitPlanMode). Codex should help you detect missing requirements, risks, and the minimum clarifying questions + acceptance checklist.
 
 ## Message template
 
