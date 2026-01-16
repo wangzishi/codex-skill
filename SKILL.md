@@ -1,12 +1,8 @@
 ---
 name: codex-skill
 description: >
-  Mandatory checkpoint. When any of these happens, you MUST use codex-skill with Codex; otherwise STOP and do not proceed:
-  (1) you are starting to draft or publish any plan/design/architecture;
-  (2) you are about to finalize with wrap-up changes or delivery (done/PR/commit/merge/release/deploy);
-  (3) you are stuck/unclear/can’t resolve something, requirements changed, or there is disagreement and you need calibration/help.
-  Trigger keywords: plan, design, architecture, proposal, review, audit, final, done, ship, PR, commit, merge, release, deploy, stuck, blocked, unclear, help, explain.
-allowed-tools: Bash, Read
+  [AUTO-TRIGGER] ⚠️ BLOCKING GATE. MUST use /codex-skill BEFORE: EnterPlanMode/ExitPlanMode, writing any plan/design to .md,
+  git commit, gh pr create, merge/release/deploy, or saying “done/shipped”. Also use when stuck/unclear/help, requirements change, or disagreement.
 ---
 
 # codex-skill
