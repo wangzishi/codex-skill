@@ -26,19 +26,44 @@ def eprint(*args: object) -> None:
     print(*args, file=sys.stderr)
 
 
-def git_repo_root(cwd: Path) -> Path:
-    try:
-        out = subprocess.check_output(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=str(cwd),
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        if out:
-            return Path(out)
-    except Exception:
-        pass
-    return cwd.resolve()
+def find_project_root(start: Path) -> Path:
+    """
+    Infer a stable project root for storing per-project state.
+
+    Rationale:
+    - Tool runners may execute commands from a subdirectory (or a nested git repo).
+    - Relying on `git` can fail in restricted PATH environments.
+    - We want the same root as the caller's project, not an arbitrary subdirectory.
+
+    Heuristic (highest priority first):
+    1) The highest ancestor containing `.claude/codex_session.json`
+    2) The highest ancestor containing `.claude/`
+    3) The highest ancestor containing `.git` (dir or file)
+    4) Fallback to the resolved start directory
+    """
+    start = start.expanduser().resolve()
+
+    ancestors: list[Path] = []
+    cur = start
+    while True:
+        ancestors.append(cur)
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+
+    best_session: Optional[Path] = None
+    best_claude_dir: Optional[Path] = None
+    best_git: Optional[Path] = None
+
+    for p in ancestors:
+        if (p / ".claude" / "codex_session.json").is_file():
+            best_session = p
+        if (p / ".claude").is_dir():
+            best_claude_dir = p
+        if (p / ".git").exists():
+            best_git = p
+
+    return best_session or best_claude_dir or best_git or start
 
 
 def session_file_path(repo_root: Path) -> Path:
@@ -358,7 +383,7 @@ def try_promote_exec_session_to_cli(session_id: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="codex-skill")
-    parser.add_argument("--cwd", default=".", help="Working directory (repo root inferred via git).")
+    parser.add_argument("--cwd", default=".", help="Working directory (project root inferred).")
     parser.add_argument("--new-session", action="store_true", help="Force creating a new Codex session.")
     parser.add_argument("--timeout-s", type=int, default=180, help="codex exec timeout in seconds.")
     parser.add_argument("--model", default=None, help="Optional model override for this call.")
@@ -372,7 +397,7 @@ def main() -> int:
     args = parser.parse_args()
 
     start_cwd = Path(args.cwd).expanduser()
-    repo_root = git_repo_root(start_cwd)
+    repo_root = find_project_root(start_cwd)
 
     session_id = None if args.new_session else read_session_id(repo_root)
     include_role_card = session_id is None
