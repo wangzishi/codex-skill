@@ -24,5 +24,7 @@ Use before you publish any plan/design/architecture. Codex should help you detec
 ## Run
 
 ```bash
-~/.claude/skills/codex-skill/bin/codex-skill-plan < message.txt
+<skill_root>/bin/codex-skill-plan < message.txt
 ```
+
+`<skill_root>` is typically `~/.claude/skills/codex-skill`.

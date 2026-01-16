@@ -25,5 +25,7 @@ Use as the final step before you say “done/shipped/merged/released/deployed”
 ## Run
 
 ```bash
-~/.claude/skills/codex-skill/bin/codex-skill-review < message.txt
+<skill_root>/bin/codex-skill-review < message.txt
 ```
+
+`<skill_root>` is typically `~/.claude/skills/codex-skill`.

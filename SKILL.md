@@ -1,47 +1,31 @@
 ---
 name: codex-skill
 description: >
-  Use Codex as a second-opinion guardrail. Use `plan` before you publish any plan/design/architecture. Use `review` as the final step before you say done/ship/merge/release/deploy. Use `chat` to ask for help or calibrate when you're stuck, unsure, confused, or requirements change.
-  Trigger keywords: plan, planning, design, architecture, proposal, risk, constraints, acceptance, checklist, test plan, review, audit, final, final step, sign-off, done, finish, complete, ready to ship, release, deploy, merge, regression, second opinion, stuck, blocked, confused, unclear, help, explain.
-allowed-tools: Bash
+  Mandatory checkpoint. When any of these happens, you MUST use codex-skill with Codex; otherwise STOP and do not proceed:
+  (1) you are starting to draft or publish any plan/design/architecture;
+  (2) you are about to finalize with wrap-up changes or delivery (done/PR/commit/merge/release/deploy);
+  (3) you are stuck/unclear/can’t resolve something, requirements changed, or there is disagreement and you need calibration/help.
+  Trigger keywords: plan, design, architecture, proposal, review, audit, final, done, ship, PR, commit, merge, release, deploy, stuck, blocked, unclear, help, explain.
+allowed-tools: Bash, Read
 ---
 
 # codex-skill
 
-This skill routes specific moments of your workflow to Codex.
+Use Codex as a second-opinion checkpoint at specific moments. When you load this skill, decide which guide to read next.
 
-- `plan`: before you publish any plan / design / architecture
-- `review`: final step before you say “done / shipped / merged / released / deployed”
-- `chat`: help & calibration (requirements change, big deviation, disagreement, or you're stuck/unsure)
+## What to load next (progressive disclosure)
 
-## Session binding (required)
+- Starting to draft a plan/design/architecture → read `plan.md` (path: `<skill_root>/plan.md`)
+- About to finalize (wrap-up changes / delivery: done/PR/commit/merge/release/deploy) → read `review.md` (path: `<skill_root>/review.md`)
+- Stuck/unclear/unresolved, requirements changed, or disagreement → read `chat.md` (path: `<skill_root>/chat.md`)
+- If unsure → start with `chat.md`
 
-- Repo session file: `<repo>/.claude/codex_session.json`
-- `<repo>` is inferred via `git rev-parse --show-toplevel` (fallback: current directory).
-- The scripts automatically:
-  - Create `<repo>/.claude/codex_session.json` on first run
-  - Reuse the same `session_id` on subsequent runs
-  - Update `updated_at`
-- To force a fresh Codex session, pass `--new-session`.
+## Paths
 
-## Input rule (required)
+- `<skill_root>` = the directory containing this `SKILL.md` (common: `~/.claude/skills/codex-skill`)
+- Guides:
+  - `<skill_root>/plan.md`
+  - `<skill_root>/review.md`
+  - `<skill_root>/chat.md`
 
-Every message you send MUST start with a verbatim user quote block (copy/paste, no rewriting):
-
-```text
-<<<USER_MESSAGE_VERBATIM_BEGIN>>>
-<the user's exact words>
-<<<USER_MESSAGE_VERBATIM_END>>>
-
-<your agent context, plan, change summary, questions>
-```
-
-## Commands
-
-Run the command that matches your intent (in `<repo>`):
-
-- Chat: `~/.claude/skills/codex-skill/bin/codex-skill-chat`
-- Plan review: `~/.claude/skills/codex-skill/bin/codex-skill-plan`
-- Final review: `~/.claude/skills/codex-skill/bin/codex-skill-review`
-
-See: `chat.md`, `plan.md`, `review.md`.
+Follow the chosen guide. It contains the command path and the required input template.

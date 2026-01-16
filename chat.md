@@ -29,5 +29,7 @@ Use when you need discussion, calibration, or help (agent ↔ Codex).
 ## Run
 
 ```bash
-~/.claude/skills/codex-skill/bin/codex-skill-chat < message.txt
+<skill_root>/bin/codex-skill-chat < message.txt
 ```
+
+`<skill_root>` is typically `~/.claude/skills/codex-skill`.
