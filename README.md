@@ -1,6 +1,6 @@
 # codex-skill
 
-A Claude Skill that uses the local `codex` CLI as a second-opinion guardrail during development.
+A Claude Skill that uses the local `codex` CLI as a second-opinion guardrail.
 
 ## Install
 
@@ -11,19 +11,17 @@ mkdir -p ~/.claude/skills
 git clone https://github.com/madwiki/codex-skill ~/.claude/skills/codex-skill
 ```
 
-Project install (shared via repo):
+## What it does
 
-```bash
-mkdir -p .claude/skills
-git clone https://github.com/madwiki/codex-skill .claude/skills/codex-skill
-```
+- Provides three entrypoints: `chat`, `plan`, `review`
+- Automatically persists and reuses the Codex session id via `<repo>/.claude/codex_session.json`
 
 ## Use
 
-- The Skill is triggered automatically based on its `description` keywords.
+- The skill can trigger automatically based on its `description` keywords.
 - If it doesn't trigger, explicitly say: "use the codex-skill skill".
 
-See:
+Docs:
 
 - `SKILL.md`
 - `chat.md`
