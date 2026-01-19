@@ -10,7 +10,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Iterator, Optional, Tuple
 
 
 CODEX_BIN = os.environ.get("CODEX_BIN", "codex")
@@ -26,44 +26,54 @@ def eprint(*args: object) -> None:
     print(*args, file=sys.stderr)
 
 
-def find_project_root(start: Path) -> Path:
-    """
-    Infer a stable project root for storing per-project state.
+CLAUDE_GLOBAL_DIR = (Path.home() / ".claude").resolve()
 
-    Rationale:
-    - Tool runners may execute commands from a subdirectory (or a nested git repo).
-    - Relying on `git` can fail in restricted PATH environments.
-    - We want the same root as the caller's project, not an arbitrary subdirectory.
 
-    Heuristic (highest priority first):
-    1) The highest ancestor containing `.claude/codex_session.json`
-    2) The highest ancestor containing `.claude/`
-    3) The highest ancestor containing `.git` (dir or file)
-    4) Fallback to the resolved start directory
-    """
-    start = start.expanduser().resolve()
+def is_global_claude_dir(claude_dir: Path) -> bool:
+    try:
+        return claude_dir.resolve() == CLAUDE_GLOBAL_DIR
+    except Exception:
+        return str(claude_dir) == str(CLAUDE_GLOBAL_DIR)
 
-    ancestors: list[Path] = []
-    cur = start
+
+def iter_ancestors(start: Path) -> Iterator[Path]:
+    cur = start.expanduser().resolve()
     while True:
-        ancestors.append(cur)
+        yield cur
         if cur.parent == cur:
             break
         cur = cur.parent
 
-    best_session: Optional[Path] = None
-    best_claude_dir: Optional[Path] = None
-    best_git: Optional[Path] = None
 
-    for p in ancestors:
-        if (p / ".claude" / "codex_session.json").is_file():
-            best_session = p
-        if (p / ".claude").is_dir():
-            best_claude_dir = p
-        if (p / ".git").exists():
-            best_git = p
+def find_session_root(start: Path) -> Optional[Path]:
+    """
+    Find the nearest ancestor directory that already owns a Codex session file.
 
-    return best_session or best_claude_dir or best_git or start
+    IMPORTANT:
+    - Never treat the global Claude Code config directory (~/.claude) as a project root.
+    - Only `.claude/codex_session.json` is a stable anchor. `.claude/` can exist at many levels
+      for other purposes (local guidelines), so we do not auto-pick based on `.claude/` alone.
+    """
+    for p in iter_ancestors(start):
+        claude_dir = p / ".claude"
+        if is_global_claude_dir(claude_dir):
+            continue
+        if (claude_dir / "codex_session.json").is_file():
+            return p
+    return None
+
+
+def candidate_roots_with_claude_dir(start: Path, limit: int = 5) -> list[Path]:
+    candidates: list[Path] = []
+    for p in iter_ancestors(start):
+        claude_dir = p / ".claude"
+        if is_global_claude_dir(claude_dir):
+            continue
+        if claude_dir.is_dir():
+            candidates.append(p)
+            if len(candidates) >= limit:
+                break
+    return candidates
 
 
 def session_file_path(repo_root: Path) -> Path:
@@ -383,7 +393,11 @@ def try_promote_exec_session_to_cli(session_id: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="codex-skill")
-    parser.add_argument("--cwd", default=".", help="Working directory (project root inferred).")
+    parser.add_argument(
+        "--cwd",
+        default=None,
+        help="Working directory used to locate the project session root.",
+    )
     parser.add_argument("--new-session", action="store_true", help="Force creating a new Codex session.")
     parser.add_argument("--timeout-s", type=int, default=180, help="codex exec timeout in seconds.")
     parser.add_argument("--model", default=None, help="Optional model override for this call.")
@@ -396,8 +410,35 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    start_cwd = Path(args.cwd).expanduser()
-    repo_root = find_project_root(start_cwd)
+    cwd_explicit = args.cwd is not None
+    start_cwd = Path(args.cwd).expanduser() if cwd_explicit else Path.cwd()
+
+    repo_root = find_session_root(start_cwd)
+    if repo_root is None:
+        if cwd_explicit:
+            chosen = start_cwd.expanduser().resolve()
+            chosen_claude_dir = chosen / ".claude"
+            if chosen_claude_dir.is_dir() and not is_global_claude_dir(chosen_claude_dir):
+                repo_root = chosen
+
+    if repo_root is None:
+        candidates = candidate_roots_with_claude_dir(start_cwd)
+        lines = [
+            "No project Codex session root is configured.",
+            "Could not find an existing session file: <dir>/.claude/codex_session.json",
+            f"(excluding the global Claude Code directory: {CLAUDE_GLOBAL_DIR}).",
+            "",
+            "Ask the user to choose a directory to store the Codex session for this workspace.",
+        ]
+        if candidates:
+            lines.append("Candidate directories that already contain a .claude/ directory (closest first):")
+            for c in candidates:
+                lines.append(f"  - {c}")
+            lines.append("Then rerun this command with: --cwd <chosen_dir>")
+        else:
+            lines.append("No .claude/ directory was found in parent directories (excluding the global one).")
+            lines.append("Ask the user to choose a directory, create <chosen_dir>/.claude/, then rerun with: --cwd <chosen_dir>")
+        raise RuntimeError("\n".join(lines))
 
     session_id = None if args.new_session else read_session_id(repo_root)
     include_role_card = session_id is None
