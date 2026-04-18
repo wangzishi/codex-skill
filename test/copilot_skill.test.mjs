@@ -8,9 +8,14 @@ import { spawn } from "node:child_process";
 
 import {
   DEFAULT_TIMEOUT_S,
+  MODEL_FAMILY_MAP,
   buildPrompt,
+  formatModelOption,
   parseArgs,
+  parseModelOptionsFromHelpConfig,
+  queryModelOptions,
   resolveWorkingDirectory,
+  resolveModelSelection,
   runCopilot,
   splitVerbatim,
 } from "../bin/copilot_skill.mjs";
@@ -131,14 +136,41 @@ test("parseArgs accepts defaults and command-last wrappers", () => {
     cwd: null,
     timeoutS: DEFAULT_TIMEOUT_S,
     model: null,
+    modelFamily: null,
+    listModelOptions: false,
   });
 
-  assert.deepEqual(parseArgs(["--cwd", ".", "--timeout-s", "42", "--model", "gpt-5.2", "plan"]), {
+  assert.deepEqual(
+    parseArgs(["--cwd", ".", "--timeout-s", "42", "--model", "gpt-5.2", "plan"]),
+    {
+      help: false,
+      command: "plan",
+      cwd: ".",
+      timeoutS: 42,
+      model: "gpt-5.2",
+      modelFamily: null,
+      listModelOptions: false,
+    },
+  );
+
+  assert.deepEqual(parseArgs(["--model-family", "claude", "chat"]), {
     help: false,
-    command: "plan",
-    cwd: ".",
-    timeoutS: 42,
-    model: "gpt-5.2",
+    command: "chat",
+    cwd: null,
+    timeoutS: DEFAULT_TIMEOUT_S,
+    model: null,
+    modelFamily: "claude",
+    listModelOptions: false,
+  });
+
+  assert.deepEqual(parseArgs(["--list-model-options"]), {
+    help: false,
+    command: null,
+    cwd: null,
+    timeoutS: DEFAULT_TIMEOUT_S,
+    model: null,
+    modelFamily: null,
+    listModelOptions: true,
   });
 });
 
@@ -146,6 +178,51 @@ test("parseArgs rejects bad input", () => {
   assert.throws(() => parseArgs([]), /Missing command/);
   assert.throws(() => parseArgs(["--timeout-s", "0", "chat"]), /positive integer/);
   assert.throws(() => parseArgs(["chat", "review"]), /Only one command/);
+  assert.throws(() => parseArgs(["--model-family", "openai", "chat"]), /must be one of/);
+  assert.throws(() => parseArgs(["--model", "gpt-5.4", "--model-family", "claude", "chat"]), /not both/);
+});
+
+test("resolveModelSelection prefers exact model and maps families", () => {
+  assert.equal(resolveModelSelection({ model: "GPT-5.4", modelFamily: null }), "GPT-5.4");
+  assert.equal(resolveModelSelection({ model: null, modelFamily: "claude" }), MODEL_FAMILY_MAP.claude);
+  assert.equal(resolveModelSelection({ model: null, modelFamily: "gemini" }), MODEL_FAMILY_MAP.gemini);
+  assert.equal(resolveModelSelection({ model: null, modelFamily: null }), null);
+});
+
+test("formatModelOption converts ids to user-facing labels", () => {
+  assert.deepEqual(formatModelOption("claude-sonnet-4.6"), {
+    id: "claude-sonnet-4.6",
+    label: "Claude Sonnet 4.6",
+    family: "claude",
+  });
+  assert.deepEqual(formatModelOption("gemini-3.1-pro"), {
+    id: "gemini-3.1-pro",
+    label: "Gemini 3.1 Pro",
+    family: "gemini",
+  });
+});
+
+test("parseModelOptionsFromHelpConfig extracts Claude and Gemini ids", () => {
+  const helpText = `
+Configuration Settings:
+
+  \`model\`: AI model to use for Copilot CLI; can be changed with /model command or --model flag option.
+    - "claude-sonnet-4.6"
+    - "claude-haiku-4.5"
+    - "gemini-2.5-pro"
+    - "gpt-5.4"
+
+  \`mouse\`: whether to enable mouse support in alt screen mode; defaults to \`true\`.
+`;
+
+  assert.deepEqual(parseModelOptionsFromHelpConfig(helpText), {
+    source: "copilot help config",
+    claude: [
+      { id: "claude-sonnet-4.6", label: "Claude Sonnet 4.6", family: "claude" },
+      { id: "claude-haiku-4.5", label: "Claude Haiku 4.5", family: "claude" },
+    ],
+    gemini: [{ id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", family: "gemini" }],
+  });
 });
 
 test("splitVerbatim normalizes newlines and preserves trailing content", () => {
@@ -189,6 +266,24 @@ test("runCopilot passes the prompt with -p and forwards model when requested", a
   const log = JSON.parse(await readFile(stub.logPath, "utf8"));
   assert.deepEqual(log.argv, ["-s", "--no-ask-user", "--model", "gpt-5.2", "-p", SAMPLE_INPUT]);
   assert.equal(log.stdin, "");
+});
+
+test("queryModelOptions parses model ids from local Copilot help", async (t) => {
+  const stub = await makeStubCommand(t, {
+    stdout: `Configuration Settings:\n\n  \`model\`: AI model to use.\n    - "claude-sonnet-4.6"\n    - "gemini-3.1-pro"\n    - "gpt-5.4"\n\n  \`mouse\`: test\n`,
+  });
+
+  const result = await queryModelOptions({
+    cwd: process.cwd(),
+    bin: stub.bin,
+    env: stub.env,
+  });
+
+  assert.deepEqual(result, {
+    source: "copilot help config",
+    claude: [{ id: "claude-sonnet-4.6", label: "Claude Sonnet 4.6", family: "claude" }],
+    gemini: [{ id: "gemini-3.1-pro", label: "Gemini 3.1 Pro", family: "gemini" }],
+  });
 });
 
 test("runCopilot surfaces stderr on failure", async (t) => {

@@ -9,6 +9,18 @@ description: >
 
 Use GitHub Copilot CLI as a read-only second-opinion checkpoint at specific moments. When you load this skill, decide which guide to read next.
 
+Before you invoke Copilot and no exact model has already been selected, first fetch the local Copilot model list:
+
+```bash
+<skill_root>/bin/copilot-skill --list-model-options
+```
+
+From that output, present all `claude-*` and `gemini-*` model ids to the user with no recommendation. Then rerun the chosen command with:
+
+- `--model <selected-model-id>`
+
+If one family is empty in the local Copilot output, do not invent options for that family.
+
 ## What to load next (progressive disclosure)
 
 - Starting to draft a plan/design/architecture (including before ExitPlanMode) -> read `plan.md` (path: `<skill_root>/plan.md`)

@@ -10,12 +10,17 @@ export const COMMANDS = ["chat", "plan", "review"];
 export const DEFAULT_TIMEOUT_S = 180;
 export const VERBATIM_BEGIN = "<<<USER_MESSAGE_VERBATIM_BEGIN>>>";
 export const VERBATIM_END = "<<<USER_MESSAGE_VERBATIM_END>>>";
+export const MODEL_FAMILY_MAP = {
+  claude: "Claude Sonnet 4.6",
+  gemini: "Gemini 2.5 Pro",
+};
 
 const COMMAND_SET = new Set(COMMANDS);
+const MODEL_FAMILY_SET = new Set(Object.keys(MODEL_FAMILY_MAP));
 
 export function usage() {
   return [
-    "usage: copilot-skill [-h] [--cwd DIR] [--timeout-s SECONDS] [--model MODEL] {chat,plan,review}",
+    "usage: copilot-skill [-h] [--cwd DIR] [--timeout-s SECONDS] [--model MODEL] [--list-model-options] {chat,plan,review}",
     "",
     "positional arguments:",
     "  {chat,plan,review}   Review mode to run.",
@@ -25,6 +30,8 @@ export function usage() {
     "  --cwd DIR            Working directory for the Copilot CLI invocation.",
     "  --timeout-s SECONDS  Copilot CLI timeout in seconds.",
     "  --model MODEL        Optional model override for this call.",
+    "  --model-family NAME  Model family alias: claude or gemini.",
+    "  --list-model-options Query Copilot CLI for Claude/Gemini model ids and exit.",
     "",
     "examples:",
     "  copilot-skill review < message.txt",
@@ -66,6 +73,8 @@ export function parseArgs(argv) {
   let cwd = null;
   let timeoutS = DEFAULT_TIMEOUT_S;
   let model = null;
+  let modelFamily = null;
+  let listModelOptions = false;
   let help = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -73,6 +82,11 @@ export function parseArgs(argv) {
 
     if (arg === "-h" || arg === "--help") {
       help = true;
+      continue;
+    }
+
+    if (arg === "--list-model-options") {
+      listModelOptions = true;
       continue;
     }
 
@@ -122,18 +136,153 @@ export function parseArgs(argv) {
       continue;
     }
 
+    const modelFamilyOption = parseLongOption(arg, "--model-family");
+    if (modelFamilyOption.matched) {
+      const { value, nextIndex } = requireOptionValue(
+        argv,
+        index,
+        "--model-family",
+        modelFamilyOption.inlineValue,
+      );
+      const normalized = value.trim().toLowerCase();
+      if (!MODEL_FAMILY_SET.has(normalized)) {
+        throw new Error(
+          `Option --model-family must be one of: ${Array.from(MODEL_FAMILY_SET).join(", ")}. Received "${value}".`,
+        );
+      }
+      modelFamily = normalized;
+      index = nextIndex;
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  if (help) {
-    return { help, command, cwd, timeoutS, model };
+  if (model !== null && modelFamily !== null) {
+    throw new Error("Use either --model or --model-family, not both.");
   }
 
-  if (command === null) {
+  if (help) {
+    return { help, command, cwd, timeoutS, model, modelFamily, listModelOptions };
+  }
+
+  if (!listModelOptions && command === null) {
     throw new Error(`Missing command. Use one of: ${COMMANDS.join(", ")}`);
   }
 
-  return { help, command, cwd, timeoutS, model };
+  return { help, command, cwd, timeoutS, model, modelFamily, listModelOptions };
+}
+
+export function resolveModelSelection({ model, modelFamily }) {
+  if (model !== null) {
+    return model;
+  }
+
+  if (modelFamily !== null) {
+    return MODEL_FAMILY_MAP[modelFamily];
+  }
+
+  return null;
+}
+
+export function parseModelOptionsFromHelpConfig(helpText) {
+  const lines = helpText.replace(/\r\n/g, "\n").split("\n");
+  const modelIds = [];
+  let inModelSection = false;
+
+  for (const line of lines) {
+    if (!inModelSection) {
+      if (line.startsWith("  `model`:")) {
+        inModelSection = true;
+      }
+      continue;
+    }
+
+    if (line.startsWith("  `") && !line.startsWith("  `model`:")) {
+      break;
+    }
+
+    const match = line.match(/"([^"]+)"/);
+    if (match) {
+      modelIds.push(match[1]);
+    }
+  }
+
+  const filtered = modelIds.filter((id) => id.startsWith("claude-") || id.startsWith("gemini-"));
+  const unique = [...new Set(filtered)];
+
+  return {
+    source: "copilot help config",
+    claude: unique.filter((id) => id.startsWith("claude-")).map((id) => formatModelOption(id)),
+    gemini: unique.filter((id) => id.startsWith("gemini-")).map((id) => formatModelOption(id)),
+  };
+}
+
+function titleCaseSegment(segment) {
+  if (/^\d/.test(segment)) {
+    return segment;
+  }
+
+  return segment.charAt(0).toUpperCase() + segment.slice(1);
+}
+
+export function formatModelOption(id) {
+  const label = id
+    .split("-")
+    .map((segment) => titleCaseSegment(segment))
+    .join(" ");
+  const family = id.startsWith("claude-") ? "claude" : id.startsWith("gemini-") ? "gemini" : "other";
+  return { id, label, family };
+}
+
+export async function queryModelOptions({
+  cwd,
+  bin = process.env.COPILOT_BIN || "copilot",
+  env = process.env,
+}) {
+  const invocation = resolveSpawnInvocation(bin, ["help", "config"]);
+
+  return await new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+
+    const proc = spawn(invocation.command, invocation.args, {
+      cwd,
+      env,
+      shell: invocation.shell,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    proc.on("error", (error) => {
+      if (error && error.code === "ENOENT") {
+        reject(new Error(`Copilot CLI executable not found: ${bin}`));
+        return;
+      }
+      reject(new Error(`Failed to launch Copilot CLI: ${error.message}`));
+    });
+
+    proc.stdout.setEncoding("utf8");
+    proc.stderr.setEncoding("utf8");
+    proc.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    proc.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+
+    proc.on("close", (code) => {
+      const cleanStdout = stripAnsi(stdout).trim();
+      const cleanStderr = stripAnsi(stderr).trim();
+
+      if (code !== 0) {
+        reject(new Error(cleanStderr || `Copilot CLI exited with code ${code}.`));
+        return;
+      }
+
+      resolve(parseModelOptionsFromHelpConfig(cleanStdout));
+    });
+  });
 }
 
 export function splitVerbatim(stdinText) {
@@ -408,20 +557,27 @@ export async function main(argv = process.argv.slice(2), io = process) {
     return 0;
   }
 
-  const stdinText = await readStdin(io.stdin);
-  if (!stdinText.trim()) {
-    io.stderr.write("Empty input. Provide content via stdin.\n");
-    return 2;
-  }
-
   try {
     const cwd = await resolveWorkingDirectory(parsed.cwd);
+
+    if (parsed.listModelOptions) {
+      const options = await queryModelOptions({ cwd });
+      io.stdout.write(`${JSON.stringify(options, null, 2)}\n`);
+      return 0;
+    }
+
+    const stdinText = await readStdin(io.stdin);
+    if (!stdinText.trim()) {
+      io.stderr.write("Empty input. Provide content via stdin.\n");
+      return 2;
+    }
+
     const prompt = buildPrompt(parsed.command, stdinText);
     const reply = await runCopilot({
       cwd,
       prompt,
       timeoutS: parsed.timeoutS,
-      model: parsed.model,
+      model: resolveModelSelection({ model: parsed.model, modelFamily: parsed.modelFamily }),
     });
     io.stdout.write(`${reply.replace(/\s+$/g, "")}\n`);
     return 0;

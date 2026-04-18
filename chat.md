@@ -29,7 +29,9 @@ Use when you need discussion, calibration, or help (agent <-> Copilot).
 ## Run
 
 ```bash
-<skill_root>/bin/copilot-skill-chat < message.txt
+<skill_root>/bin/copilot-skill-chat --model claude-sonnet-4.6 < message.txt
 ```
 
 `<skill_root>` is typically `~/.agents/skills/copilot-skill`.
+
+Before running the command, first query `<skill_root>/bin/copilot-skill --list-model-options`, then present all `claude-*` and `gemini-*` ids from that output to the user with no recommendation.

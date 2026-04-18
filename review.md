@@ -25,7 +25,9 @@ Use as the final step before you say "done/shipped/merged/released/deployed". Do
 ## Run
 
 ```bash
-<skill_root>/bin/copilot-skill-review < message.txt
+<skill_root>/bin/copilot-skill-review --model claude-sonnet-4.6 < message.txt
 ```
 
 `<skill_root>` is typically `~/.agents/skills/copilot-skill`.
+
+Before running the command, first query `<skill_root>/bin/copilot-skill --list-model-options`, then present all `claude-*` and `gemini-*` ids from that output to the user with no recommendation.

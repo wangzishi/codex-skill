@@ -24,7 +24,9 @@ Use before you publish any plan/design/architecture (including before ExitPlanMo
 ## Run
 
 ```bash
-<skill_root>/bin/copilot-skill-plan < message.txt
+<skill_root>/bin/copilot-skill-plan --model gemini-2.5-pro < message.txt
 ```
 
 `<skill_root>` is typically `~/.agents/skills/copilot-skill`.
+
+Before running the command, first query `<skill_root>/bin/copilot-skill --list-model-options`, then present all `claude-*` and `gemini-*` ids from that output to the user with no recommendation.
