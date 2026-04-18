@@ -1,6 +1,6 @@
 # review
 
-Use as the final step before you say “done/shipped/merged/released/deployed”. Do not use this for plan review (use `plan.md` instead). Codex should check correctness vs the verbatim user requirements and call out regressions, missing coverage, and minimum user confirmations.
+Use as the final step before you say "done/shipped/merged/released/deployed". Do not use this for plan review (use `plan.md` instead). Copilot should check correctness vs the verbatim user requirements and call out regressions, missing coverage, and minimum user confirmations.
 
 ## Message template
 
@@ -25,7 +25,7 @@ Use as the final step before you say “done/shipped/merged/released/deployed”
 ## Run
 
 ```bash
-<skill_root>/bin/codex-skill-review < message.txt
+<skill_root>/bin/copilot-skill-review < message.txt
 ```
 
-`<skill_root>` is typically `~/.claude/skills/codex-skill`.
+`<skill_root>` is typically `~/.agents/skills/copilot-skill`.

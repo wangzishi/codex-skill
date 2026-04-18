@@ -1,6 +1,6 @@
 # plan
 
-Use before you publish any plan/design/architecture (including before ExitPlanMode). Codex should help you detect missing requirements, risks, and the minimum clarifying questions + acceptance checklist.
+Use before you publish any plan/design/architecture (including before ExitPlanMode). Copilot should help you detect missing requirements, risks, and the minimum clarifying questions + acceptance checklist.
 
 ## Message template
 
@@ -24,7 +24,7 @@ Use before you publish any plan/design/architecture (including before ExitPlanMo
 ## Run
 
 ```bash
-<skill_root>/bin/codex-skill-plan < message.txt
+<skill_root>/bin/copilot-skill-plan < message.txt
 ```
 
-`<skill_root>` is typically `~/.claude/skills/codex-skill`.
+`<skill_root>` is typically `~/.agents/skills/copilot-skill`.
