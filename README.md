@@ -51,19 +51,26 @@ If a client still scans `~/.claude/skills/`, keep a copy or symlink there as a c
 <skill_root>/bin/copilot-skill --list-model-options
 ```
 
+- If the host agent supports a blocking interactive picker, it must call `request_user_input` so the user can choose one exact model id.
+- If structured prompts are unavailable, ask the same question in plain text and wait for the answer.
 - Then rerun the chosen command with the exact selected model id:
 
 ```bash
-<skill_root>/bin/copilot-skill-plan --model claude-sonnet-4.6 < message.txt
+<skill_root>/bin/copilot-skill-plan --model <selected-model-id> < message.txt
 ```
 
 Examples:
 
 ```bash
 <skill_root>/bin/copilot-skill --list-model-options
-<skill_root>/bin/copilot-skill-plan --model claude-sonnet-4.6 < message.txt
-<skill_root>/bin/copilot-skill-review --model gemini-2.5-pro < message.txt
+<skill_root>/bin/copilot-skill-plan --model <selected-model-id> < message.txt
+<skill_root>/bin/copilot-skill-review --model <selected-model-id> < message.txt
 ```
+
+- After Copilot responds, the host agent must briefly summarize what happened for the user:
+  - exact model id used
+  - why Copilot was called
+  - the key result in 1-3 short sentences
 
 Docs:
 

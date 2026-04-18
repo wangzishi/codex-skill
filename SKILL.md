@@ -15,11 +15,23 @@ Before you invoke Copilot and no exact model has already been selected, first fe
 <skill_root>/bin/copilot-skill --list-model-options
 ```
 
-From that output, present all `claude-*` and `gemini-*` model ids to the user with no recommendation. Then rerun the chosen command with:
+From that output, present all `claude-*` and `gemini-*` model ids to the user with no recommendation.
+
+If the host agent supports structured blocking prompts, it must call `request_user_input` with one blocking question that lets the user choose the exact model id.
+
+If structured prompts are unavailable, ask the same question in plain text and wait for the answer.
+
+Then rerun the chosen command with:
 
 - `--model <selected-model-id>`
 
 If one family is empty in the local Copilot output, do not invent options for that family.
+
+After `copilot-skill` returns, the host agent must briefly summarize the result to the user before continuing. Include:
+
+- which exact Copilot model was used
+- why Copilot was invoked (`chat`, `plan`, or `review`)
+- the key conclusion or decision in 1-3 short sentences
 
 ## What to load next (progressive disclosure)
 
