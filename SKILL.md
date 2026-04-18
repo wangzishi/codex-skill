@@ -35,6 +35,21 @@ Then rerun the chosen command with:
 
 If one family is empty in the local Copilot output, do not invent options for that family.
 
+If the host agent supports sub-agents, the recommended orchestration is:
+
+1. The host agent collects both blocking user choices: exact model id, then context mode.
+2. The host agent delegates the actual `copilot-skill` command execution to a sub-agent.
+3. The sub-agent returns Copilot's raw answer to the host agent.
+4. The host agent summarizes the result for the user and remains responsible for the next action.
+
+Do not delegate model selection or context-mode selection to a sub-agent. Those blocking user interactions belong to the host agent.
+
+Recommended sub-agent handoff contract:
+
+- The host agent passes the exact command, working directory, and fully assembled stdin payload.
+- The sub-agent runs `copilot-skill-chat|plan|review` and returns Copilot's raw output only.
+- The sub-agent does not ask the user questions and does not continue implementation on its own.
+
 After `copilot-skill` returns, the host agent must briefly summarize the result to the user before continuing. Include:
 
 - which exact Copilot model was used

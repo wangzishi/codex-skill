@@ -43,4 +43,6 @@ After model selection, the host agent must collect a second explicit context mod
 
 If the host agent supports structured blocking prompts, it must use `request_user_input` for this choice too; otherwise ask in plain text.
 
+If sub-agents are available, keep both blocking user choices in the host agent. After `model` and `context-mode` are fixed, the host agent should delegate the actual `copilot-skill-chat` invocation to a sub-agent, receive Copilot's raw reply, and then summarize it for the user.
+
 After Copilot responds, briefly summarize for the user which model and context mode were used, why Copilot was consulted, and the main takeaway.

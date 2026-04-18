@@ -58,6 +58,16 @@ If a client still scans `~/.claude/skills/`, keep a copy or symlink there as a c
   - `provided`: only use the supplied prompt context
   - `repo-read`: may read/search relevant files in the working directory, but may not modify files, execute commands, or access URLs
 - If the host agent supports a blocking interactive picker, it must use `request_user_input` for context mode too.
+- If the host agent supports sub-agents, the recommended orchestration is:
+  1. host agent collects both blocking choices (`model`, then `context-mode`)
+  2. host agent delegates the actual `copilot-skill-*` command to a sub-agent
+  3. sub-agent returns Copilot's raw answer to the host agent
+  4. host agent summarizes the result for the user and decides the next step
+- Do not delegate model selection or context-mode selection to a sub-agent. Those user-facing blocking interactions stay in the host agent.
+- Recommended sub-agent handoff contract:
+  - host agent passes the exact command, working directory, and fully assembled stdin payload
+  - sub-agent runs `copilot-skill-chat|plan|review` and returns Copilot's raw output only
+  - sub-agent does not ask the user questions and does not continue implementation on its own
 - Then rerun the chosen command with the exact selected model id:
 
 ```bash
