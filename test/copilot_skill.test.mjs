@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 
 import {
   CONTEXT_MODES,
+  DEFAULT_REPO_READ_TIMEOUT_S,
   DEFAULT_TIMEOUT_S,
   MODEL_FAMILY_MAP,
   buildPrompt,
@@ -160,7 +161,7 @@ test("parseArgs accepts defaults and command-last wrappers", () => {
     help: false,
     command: "chat",
     cwd: null,
-    timeoutS: DEFAULT_TIMEOUT_S,
+    timeoutS: DEFAULT_REPO_READ_TIMEOUT_S,
     model: null,
     contextMode: "repo-read",
     modelFamily: "claude",
@@ -177,6 +178,16 @@ test("parseArgs accepts defaults and command-last wrappers", () => {
     modelFamily: null,
     listModelOptions: true,
   });
+});
+
+test("parseArgs uses repo-read timeout defaults only when --timeout-s is omitted", () => {
+  assert.equal(parseArgs(["--context-mode", "repo-read", "chat"]).timeoutS, DEFAULT_REPO_READ_TIMEOUT_S);
+  assert.equal(parseArgs(["chat", "--context-mode", "repo-read"]).timeoutS, DEFAULT_REPO_READ_TIMEOUT_S);
+  assert.equal(parseArgs(["--context-mode", "provided", "chat"]).timeoutS, DEFAULT_TIMEOUT_S);
+  assert.equal(parseArgs(["--context-mode", "provided", "--timeout-s", "600", "chat"]).timeoutS, 600);
+  assert.equal(parseArgs(["--context-mode", "repo-read", "--timeout-s", "300", "chat"]).timeoutS, 300);
+  assert.equal(parseArgs(["--context-mode", "repo-read", "--timeout-s", "1", "chat"]).timeoutS, 1);
+  assert.equal(parseArgs(["--timeout-s", "300", "--context-mode", "repo-read", "chat"]).timeoutS, 300);
 });
 
 test("parseArgs rejects bad input", () => {

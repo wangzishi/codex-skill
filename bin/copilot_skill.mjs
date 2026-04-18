@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 
 export const COMMANDS = ["chat", "plan", "review"];
 export const DEFAULT_TIMEOUT_S = 180;
+export const DEFAULT_REPO_READ_TIMEOUT_S = 600;
 export const VERBATIM_BEGIN = "<<<USER_MESSAGE_VERBATIM_BEGIN>>>";
 export const VERBATIM_END = "<<<USER_MESSAGE_VERBATIM_END>>>";
 export const CONTEXT_MODES = ["provided", "repo-read"];
@@ -30,7 +31,7 @@ export function usage() {
     "options:",
     "  -h, --help           Show this help message and exit.",
     "  --cwd DIR            Working directory for the Copilot CLI invocation.",
-    "  --timeout-s SECONDS  Copilot CLI timeout in seconds.",
+    "  --timeout-s SECONDS  Copilot CLI timeout in seconds (default: 180, repo-read: 600).",
     "  --model MODEL        Optional model override for this call.",
     "  --context-mode MODE  Context mode: provided or repo-read.",
     "  --model-family NAME  Model family alias: claude or gemini.",
@@ -74,7 +75,8 @@ function requireOptionValue(argv, index, option, inlineValue) {
 export function parseArgs(argv) {
   let command = null;
   let cwd = null;
-  let timeoutS = DEFAULT_TIMEOUT_S;
+  let timeoutS = null;
+  let timeoutExplicit = false;
   let model = null;
   let contextMode = "provided";
   let modelFamily = null;
@@ -123,6 +125,7 @@ export function parseArgs(argv) {
         throw new Error(`Option --timeout-s must be a positive integer. Received "${value}".`);
       }
       timeoutS = parsed;
+      timeoutExplicit = true;
       index = nextIndex;
       continue;
     }
@@ -183,6 +186,10 @@ export function parseArgs(argv) {
 
   if (model !== null && modelFamily !== null) {
     throw new Error("Use either --model or --model-family, not both.");
+  }
+
+  if (!timeoutExplicit) {
+    timeoutS = contextMode === "repo-read" ? DEFAULT_REPO_READ_TIMEOUT_S : DEFAULT_TIMEOUT_S;
   }
 
   if (help) {

@@ -30,6 +30,7 @@ git clone <repo-url> ./.agents/skills/copilot-skill
 - Uses a fixed prompt contract so Copilot reviews the provided context instead of modifying files
 - Supports `--model` for an exact Copilot model
 - Supports `--context-mode provided|repo-read` to control whether Copilot may inspect repository files
+- Defaults `--timeout-s` to 180 seconds in `provided` mode and 600 seconds in `repo-read` mode
 - Supports `--list-model-options` to discover Claude/Gemini model ids exposed by the local Copilot CLI
 
 ## Migration from `codex-skill`
