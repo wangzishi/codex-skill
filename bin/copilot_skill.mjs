@@ -10,17 +10,19 @@ export const COMMANDS = ["chat", "plan", "review"];
 export const DEFAULT_TIMEOUT_S = 180;
 export const VERBATIM_BEGIN = "<<<USER_MESSAGE_VERBATIM_BEGIN>>>";
 export const VERBATIM_END = "<<<USER_MESSAGE_VERBATIM_END>>>";
+export const CONTEXT_MODES = ["provided", "repo-read"];
 export const MODEL_FAMILY_MAP = {
   claude: "Claude Sonnet 4.6",
   gemini: "Gemini 2.5 Pro",
 };
 
 const COMMAND_SET = new Set(COMMANDS);
+const CONTEXT_MODE_SET = new Set(CONTEXT_MODES);
 const MODEL_FAMILY_SET = new Set(Object.keys(MODEL_FAMILY_MAP));
 
 export function usage() {
   return [
-    "usage: copilot-skill [-h] [--cwd DIR] [--timeout-s SECONDS] [--model MODEL] [--list-model-options] {chat,plan,review}",
+    "usage: copilot-skill [-h] [--cwd DIR] [--timeout-s SECONDS] [--model MODEL] [--context-mode MODE] [--list-model-options] {chat,plan,review}",
     "",
     "positional arguments:",
     "  {chat,plan,review}   Review mode to run.",
@@ -30,6 +32,7 @@ export function usage() {
     "  --cwd DIR            Working directory for the Copilot CLI invocation.",
     "  --timeout-s SECONDS  Copilot CLI timeout in seconds.",
     "  --model MODEL        Optional model override for this call.",
+    "  --context-mode MODE  Context mode: provided or repo-read.",
     "  --model-family NAME  Model family alias: claude or gemini.",
     "  --list-model-options Query Copilot CLI for Claude/Gemini model ids and exit.",
     "",
@@ -73,6 +76,7 @@ export function parseArgs(argv) {
   let cwd = null;
   let timeoutS = DEFAULT_TIMEOUT_S;
   let model = null;
+  let contextMode = "provided";
   let modelFamily = null;
   let listModelOptions = false;
   let help = false;
@@ -136,6 +140,25 @@ export function parseArgs(argv) {
       continue;
     }
 
+    const contextModeOption = parseLongOption(arg, "--context-mode");
+    if (contextModeOption.matched) {
+      const { value, nextIndex } = requireOptionValue(
+        argv,
+        index,
+        "--context-mode",
+        contextModeOption.inlineValue,
+      );
+      const normalized = value.trim().toLowerCase();
+      if (!CONTEXT_MODE_SET.has(normalized)) {
+        throw new Error(
+          `Option --context-mode must be one of: ${CONTEXT_MODES.join(", ")}. Received "${value}".`,
+        );
+      }
+      contextMode = normalized;
+      index = nextIndex;
+      continue;
+    }
+
     const modelFamilyOption = parseLongOption(arg, "--model-family");
     if (modelFamilyOption.matched) {
       const { value, nextIndex } = requireOptionValue(
@@ -163,14 +186,14 @@ export function parseArgs(argv) {
   }
 
   if (help) {
-    return { help, command, cwd, timeoutS, model, modelFamily, listModelOptions };
+    return { help, command, cwd, timeoutS, model, contextMode, modelFamily, listModelOptions };
   }
 
   if (!listModelOptions && command === null) {
     throw new Error(`Missing command. Use one of: ${COMMANDS.join(", ")}`);
   }
 
-  return { help, command, cwd, timeoutS, model, modelFamily, listModelOptions };
+  return { help, command, cwd, timeoutS, model, contextMode, modelFamily, listModelOptions };
 }
 
 export function resolveModelSelection({ model, modelFamily }) {
@@ -313,7 +336,18 @@ export function splitVerbatim(stdinText) {
   return { verbatim, rest };
 }
 
-export function safetyHeader(tool) {
+export function safetyHeader(tool, contextMode) {
+  const repoReadLines =
+    contextMode === "repo-read"
+      ? [
+          "You may read and search files within the current working directory when that is necessary to answer well.",
+          "Do not modify files, execute commands, use shell tools, or access URLs.",
+          "Limit yourself to the minimum relevant files and cite repository evidence in your reasoning when useful.",
+        ]
+      : [
+          "Do not modify files, execute commands, use tools, or rely on repository reads beyond the provided context.",
+        ];
+
   return [
     "<<<ROLE_CARD_BEGIN>>>",
     "You are GitHub Copilot CLI acting as a read-only second-opinion reviewer for an AI coding agent.",
@@ -321,15 +355,17 @@ export function safetyHeader(tool) {
     "Treat everything after the verbatim block as agent-authored context, questions, plans, or delivery summaries.",
     'Address the AI agent and refer to the human as "the user" (not "you").',
     "Do not ask the end user directly.",
-    "Do not modify files, execute commands, use tools, or rely on repository reads beyond the provided context.",
+    ...repoReadLines,
     "If additional information is required, list the minimum questions for the agent to ask the user.",
     "Reply in plain text only.",
     "<<<ROLE_CARD_END>>>",
     "",
     "<<<AGENT_MESSAGE_BEGIN>>>",
-    `origin=copilot-skill tool=${tool}`,
+    `origin=copilot-skill tool=${tool} context_mode=${contextMode}`,
     "You are speaking with an AI coding agent (not the end user).",
-    "This invocation is read-only. Do not modify files, execute commands, or use tools.",
+    contextMode === "repo-read"
+      ? "This invocation is read-only. You may read relevant files inside the working directory, but do not modify files, execute commands, or access URLs."
+      : "This invocation is read-only. Do not modify files, execute commands, use tools, or read repository files beyond the provided context.",
     "<<<AGENT_MESSAGE_END>>>",
   ].join("\n");
 }
@@ -360,10 +396,10 @@ export function toolSuffix(tool) {
   return "Reply in English and keep it concise.";
 }
 
-export function buildPrompt(tool, stdinText) {
+export function buildPrompt(tool, stdinText, contextMode = "provided") {
   const { verbatim, rest } = splitVerbatim(stdinText);
   const parts = [verbatim.replace(/\n$/, "")];
-  const agentParts = [safetyHeader(tool)];
+  const agentParts = [safetyHeader(tool, contextMode)];
   const restStripped = rest.trim();
 
   if (restStripped) {
@@ -448,7 +484,13 @@ export async function runCopilot({
   bin = process.env.COPILOT_BIN || "copilot",
   env = process.env,
 }) {
-  const invocationArgs = ["-s", "--no-ask-user"];
+  const invocationArgs = [
+    "-s",
+    "--no-ask-user",
+    "--deny-tool=write",
+    "--deny-tool=shell",
+    "--deny-tool=url",
+  ];
   if (model) {
     invocationArgs.push("--model", model);
   }
@@ -572,7 +614,7 @@ export async function main(argv = process.argv.slice(2), io = process) {
       return 2;
     }
 
-    const prompt = buildPrompt(parsed.command, stdinText);
+    const prompt = buildPrompt(parsed.command, stdinText, parsed.contextMode);
     const reply = await runCopilot({
       cwd,
       prompt,

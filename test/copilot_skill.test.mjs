@@ -7,6 +7,7 @@ import process from "node:process";
 import { spawn } from "node:child_process";
 
 import {
+  CONTEXT_MODES,
   DEFAULT_TIMEOUT_S,
   MODEL_FAMILY_MAP,
   buildPrompt,
@@ -136,6 +137,7 @@ test("parseArgs accepts defaults and command-last wrappers", () => {
     cwd: null,
     timeoutS: DEFAULT_TIMEOUT_S,
     model: null,
+    contextMode: "provided",
     modelFamily: null,
     listModelOptions: false,
   });
@@ -148,17 +150,19 @@ test("parseArgs accepts defaults and command-last wrappers", () => {
       cwd: ".",
       timeoutS: 42,
       model: "gpt-5.2",
+      contextMode: "provided",
       modelFamily: null,
       listModelOptions: false,
     },
   );
 
-  assert.deepEqual(parseArgs(["--model-family", "claude", "chat"]), {
+  assert.deepEqual(parseArgs(["--context-mode", "repo-read", "--model-family", "claude", "chat"]), {
     help: false,
     command: "chat",
     cwd: null,
     timeoutS: DEFAULT_TIMEOUT_S,
     model: null,
+    contextMode: "repo-read",
     modelFamily: "claude",
     listModelOptions: false,
   });
@@ -169,15 +173,18 @@ test("parseArgs accepts defaults and command-last wrappers", () => {
     cwd: null,
     timeoutS: DEFAULT_TIMEOUT_S,
     model: null,
+    contextMode: "provided",
     modelFamily: null,
     listModelOptions: true,
   });
 });
 
 test("parseArgs rejects bad input", () => {
+  assert.deepEqual(CONTEXT_MODES, ["provided", "repo-read"]);
   assert.throws(() => parseArgs([]), /Missing command/);
   assert.throws(() => parseArgs(["--timeout-s", "0", "chat"]), /positive integer/);
   assert.throws(() => parseArgs(["chat", "review"]), /Only one command/);
+  assert.throws(() => parseArgs(["--context-mode", "full", "chat"]), /must be one of/);
   assert.throws(() => parseArgs(["--model-family", "openai", "chat"]), /must be one of/);
   assert.throws(() => parseArgs(["--model", "gpt-5.4", "--model-family", "claude", "chat"]), /not both/);
 });
@@ -244,6 +251,13 @@ test("buildPrompt adds read-only safety header and tool suffix", () => {
   assert.match(prompt, /## Agent context/);
 });
 
+test("buildPrompt enables repository reads only in repo-read mode", () => {
+  const prompt = buildPrompt("review", SAMPLE_INPUT, "repo-read");
+  assert.match(prompt, /You may read and search files within the current working directory/);
+  assert.match(prompt, /context_mode=repo-read/);
+  assert.match(prompt, /do not modify files, execute commands, or access URLs/i);
+});
+
 test("resolveWorkingDirectory validates the directory", async () => {
   const resolved = await resolveWorkingDirectory(".");
   assert.equal(resolved, process.cwd());
@@ -264,7 +278,17 @@ test("runCopilot passes the prompt with -p and forwards model when requested", a
   assert.equal(reply, "review complete");
 
   const log = JSON.parse(await readFile(stub.logPath, "utf8"));
-  assert.deepEqual(log.argv, ["-s", "--no-ask-user", "--model", "gpt-5.2", "-p", SAMPLE_INPUT]);
+  assert.deepEqual(log.argv, [
+    "-s",
+    "--no-ask-user",
+    "--deny-tool=write",
+    "--deny-tool=shell",
+    "--deny-tool=url",
+    "--model",
+    "gpt-5.2",
+    "-p",
+    SAMPLE_INPUT,
+  ]);
   assert.equal(log.stdin, "");
 });
 
@@ -353,8 +377,11 @@ test("PowerShell wrapper runs the fixed plan command", async (t) => {
   const log = JSON.parse(await readFile(stub.logPath, "utf8"));
   assert.equal(log.argv[0], "-s");
   assert.equal(log.argv[1], "--no-ask-user");
-  assert.equal(log.argv[2], "-p");
-  assert.match(log.argv.slice(3).join(" "), /origin=copilot-skill tool=plan/);
+  assert.equal(log.argv[2], "--deny-tool=write");
+  assert.equal(log.argv[3], "--deny-tool=shell");
+  assert.equal(log.argv[4], "--deny-tool=url");
+  assert.equal(log.argv[5], "-p");
+  assert.match(log.argv.slice(6).join(" "), /origin=copilot-skill tool=plan context_mode=provided/);
 });
 
 test("cmd wrapper runs the fixed review command", async (t) => {

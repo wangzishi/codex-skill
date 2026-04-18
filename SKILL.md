@@ -21,15 +21,24 @@ If the host agent supports structured blocking prompts, it must call `request_us
 
 If structured prompts are unavailable, ask the same question in plain text and wait for the answer.
 
+After the model is chosen, the host agent must collect a second explicit choice for context mode:
+
+- `provided`: Copilot may only use the supplied prompt context
+- `repo-read`: Copilot may read/search relevant files in the working directory, but must not modify files, execute commands, or access URLs
+
+If the host agent supports structured blocking prompts, it must use `request_user_input` for this choice too. If not, ask in plain text and wait for the answer.
+
 Then rerun the chosen command with:
 
 - `--model <selected-model-id>`
+- `--context-mode provided|repo-read`
 
 If one family is empty in the local Copilot output, do not invent options for that family.
 
 After `copilot-skill` returns, the host agent must briefly summarize the result to the user before continuing. Include:
 
 - which exact Copilot model was used
+- which context mode was used
 - why Copilot was invoked (`chat`, `plan`, or `review`)
 - the key conclusion or decision in 1-3 short sentences
 

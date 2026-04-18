@@ -29,6 +29,7 @@ git clone <repo-url> ./.agents/skills/copilot-skill
 - Pipes your prompt to the local `copilot` CLI in read-only programmatic mode
 - Uses a fixed prompt contract so Copilot reviews the provided context instead of modifying files
 - Supports `--model` for an exact Copilot model
+- Supports `--context-mode provided|repo-read` to control whether Copilot may inspect repository files
 - Supports `--list-model-options` to discover Claude/Gemini model ids exposed by the local Copilot CLI
 
 ## Migration from `codex-skill`
@@ -53,22 +54,27 @@ If a client still scans `~/.claude/skills/`, keep a copy or symlink there as a c
 
 - If the host agent supports a blocking interactive picker, it must call `request_user_input` so the user can choose one exact model id.
 - If structured prompts are unavailable, ask the same question in plain text and wait for the answer.
+- After model selection, the host agent must collect a second explicit choice for context mode:
+  - `provided`: only use the supplied prompt context
+  - `repo-read`: may read/search relevant files in the working directory, but may not modify files, execute commands, or access URLs
+- If the host agent supports a blocking interactive picker, it must use `request_user_input` for context mode too.
 - Then rerun the chosen command with the exact selected model id:
 
 ```bash
-<skill_root>/bin/copilot-skill-plan --model <selected-model-id> < message.txt
+<skill_root>/bin/copilot-skill-plan --model <selected-model-id> --context-mode <selected-context-mode> < message.txt
 ```
 
 Examples:
 
 ```bash
 <skill_root>/bin/copilot-skill --list-model-options
-<skill_root>/bin/copilot-skill-plan --model <selected-model-id> < message.txt
-<skill_root>/bin/copilot-skill-review --model <selected-model-id> < message.txt
+<skill_root>/bin/copilot-skill-plan --model <selected-model-id> --context-mode <selected-context-mode> < message.txt
+<skill_root>/bin/copilot-skill-review --model <selected-model-id> --context-mode <selected-context-mode> < message.txt
 ```
 
 - After Copilot responds, the host agent must briefly summarize what happened for the user:
   - exact model id used
+  - context mode used
   - why Copilot was called
   - the key result in 1-3 short sentences
 
